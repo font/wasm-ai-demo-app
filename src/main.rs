@@ -1,12 +1,27 @@
-use wasmedge_wasi_socket::TcpListener;
+use std::net::SocketAddr;
+
+use hyper::server::conn::Http;
+use hyper::service::service_fn;
+use tokio::net::TcpListener;
+
 mod http;
 
-fn main() -> std::io::Result<()> {
-    let host = "0.0.0.0";
-    let port = std::env::var("PORT").unwrap_or("8080".to_string());
-    let listener = TcpListener::bind(format!("{}:{}", host, port), false)?;
-    println!("Now listening at {}:{}", host, port);
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+
+    let listener = TcpListener::bind(addr).await?;
+    println!("Listening on http://{}", addr);
     loop {
-        let _ = http::handle_client(listener.accept(false)?.0);
+        let (stream, _) = listener.accept().await?;
+
+        tokio::task::spawn(async move {
+            if let Err(err) = Http::new()
+                .serve_connection(stream, service_fn(http::http_handler))
+                .await
+            {
+                println!("Error serving connection: {:?}", err);
+            }
+        });
     }
 }

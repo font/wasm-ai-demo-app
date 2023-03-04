@@ -1,45 +1,29 @@
-use bytecodec::DecodeExt;
-use httpcodec::{HttpVersion, ReasonPhrase, Request, RequestDecoder, Response, StatusCode};
-use std::io::{Read, Write};
-use wasmedge_wasi_socket::{Shutdown, TcpStream};
+use hyper::{Body, Method, Request, Response, StatusCode};
 
-pub fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
-    let mut buff = [0u8; 1024];
-    let mut data = Vec::new();
+/// This is our service handler. It receives a Request, routes on its
+/// path, and returns a Future of a Response.
+pub async fn http_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    let model_data: &[u8] = include_bytes!("models/mobilenet.pt");
 
-    loop {
-        let n = stream.read(&mut buff)?;
-        data.extend_from_slice(&buff[0..n]);
-        if n < 1024 {
-            break;
+    match (req.method(), req.uri().path()) {
+        // Serve some instructions at /
+        (&Method::GET, "/") => Ok(Response::new(Body::from(HTML_CODE))),
+
+        (&Method::POST, "/classify") => {
+            let buf = hyper::body::to_bytes(req.into_body()).await?;
+            //let flat_img = wasmedge_tensorflow_interface::load_jpg_image_to_rgb8(&buf, 224, 224);
+
+            //Ok(Response::new(Body::from(format!("{} is detected with {}/255 confidence", class_name, max_value))))
+            Ok(Response::new(Body::from(format!("..."))))
+        }
+
+        // Return the 404 Not Found for other routes.
+        _ => {
+            let mut not_found = Response::default();
+            *not_found.status_mut() = StatusCode::NOT_FOUND;
+            Ok(not_found)
         }
     }
-
-    let mut decoder =
-        RequestDecoder::<httpcodec::BodyDecoder<bytecodec::bytes::Utf8Decoder>>::default();
-
-    let req = match decoder.decode_from_bytes(data.as_slice()) {
-        Ok(req) => handle_http(req),
-        Err(e) => Err(e),
-    };
-
-    let r = match req {
-        Ok(r) => r,
-        Err(e) => {
-            let err = format!("{:?}", e);
-            Response::new(
-                HttpVersion::V1_0,
-                StatusCode::new(500).unwrap(),
-                ReasonPhrase::new(err.as_str()).unwrap(),
-                err.clone(),
-            )
-        }
-    };
-
-    let write_buf = r.to_string();
-    stream.write(write_buf.as_bytes())?;
-    stream.shutdown(Shutdown::Both)?;
-    Ok(())
 }
 
 const HTML_CODE: &'static str = r#"
@@ -56,16 +40,12 @@ const HTML_CODE: &'static str = r#"
 </head>
 
 <body>
-    <p>Hello everyone!</p>
+    <h1>To classify an image try one of the options below:</h1>
+    <ol>
+        <li><p>POST data to /classify such as: `curl http://localhost:8080/classify -X POST --data-binary '@grace_hopper.jpg'`</p></li>
+        <li><p>Use the below form to upload an image</p></li>
+    </ol>
+    
 </body>
 </html>
 "#;
-
-fn handle_http(_req: Request<String>) -> bytecodec::Result<Response<String>> {
-    Ok(Response::new(
-        HttpVersion::V1_0,
-        StatusCode::new(200)?,
-        ReasonPhrase::new("")?,
-        HTML_CODE.to_string(),
-    ))
-}
