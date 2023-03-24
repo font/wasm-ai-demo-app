@@ -1,13 +1,30 @@
 use hyper::{Body, Method, Request, Response, StatusCode};
+use tera::{Context, Tera};
 
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
 pub async fn http_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    let mut tera = Tera::default();
+    match tera.add_raw_templates(vec![
+        ("base.html", BASE_HTML_TEMPLATE),
+        ("index.html", INDEX_HTML_TEMPLATE),
+    ]) {
+        Ok(_) => (),
+        Err(_) => return internal_server_error_result(),
+    };
+
     let model_data: &[u8] = include_bytes!("models/mobilenet.pt");
 
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
-        (&Method::GET, "/") => Ok(Response::new(Body::from(HTML_CODE))),
+        (&Method::GET, "/") => {
+            let mut context = Context::new();
+            let output = match tera.render("index.html", &context) {
+                Ok(output) => output,
+                Err(_) => return internal_server_error_result(),
+            };
+            Ok(Response::new(Body::from(output)))
+        }
 
         (&Method::POST, "/classify") => {
             let buf = hyper::body::to_bytes(req.into_body()).await?;
@@ -26,7 +43,13 @@ pub async fn http_handler(req: Request<Body>) -> Result<Response<Body>, hyper::E
     }
 }
 
-const HTML_CODE: &'static str = r#"
+fn internal_server_error_result() -> Result<Response<Body>, hyper::Error> {
+    let mut server_error = Response::default();
+    *server_error.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    Ok(server_error)
+}
+
+const BASE_HTML_TEMPLATE: &'static str = r#"
 <!doctype html>
 
 <html lang="en">
@@ -40,12 +63,26 @@ const HTML_CODE: &'static str = r#"
 </head>
 
 <body>
+    {% block body %}{% endblock body %}
+</body>
+</html>
+"#;
+
+const INDEX_HTML_TEMPLATE: &'static str = r#"
+{% extends "base.html" %}
+{% block body %}
     <h1>To classify an image try one of the options below:</h1>
     <ol>
         <li><p>POST data to /classify such as: `curl http://localhost:8080/classify -X POST --data-binary '@grace_hopper.jpg'`</p></li>
         <li><p>Use the below form to upload an image</p></li>
+
+        <br></br>
+        <p>Click on the "Choose File" button to select a file and then click "Upload Image":</p>
+
+        <form action="classify" method="post" enctype="multipart/form-data">
+            <input type="file" name="uploadedFile">
+            <input type="submit" value="Upload Image">
+        </form>
     </ol>
-    
-</body>
-</html>
+{% endblock body %}
 "#;
