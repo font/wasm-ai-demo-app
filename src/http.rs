@@ -1,10 +1,9 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{fs, fs::File};
-//use std::fs::File;
 use std::io::Write;
+use std::{fs, fs::File};
 
-use hyper::{body::Buf, header, header::HeaderValue, Body, Method, Request, Response, StatusCode};
+use hyper::{header, header::HeaderValue, Body, Method, Request, Response, StatusCode};
 use tera::{Context, Tera};
 
 /// This is our service handler. It receives a Request, routes on its
@@ -38,65 +37,25 @@ pub async fn http_handler(req: Request<Body>) -> Result<Response<Body>, hyper::E
         (&Method::POST, "/classify") => {
             let buf = hyper::body::to_bytes(req.into_body()).await?;
             // TODO(font): use unique file ID and to somehow link it to the client requesting this.
-            let mut file = match File::create(TEMP_FILENAME) {
-                Ok(file) => file,
+            let mut image_file = match File::create(TEMP_IMAGE_NAME) {
+                Ok(image_file) => image_file,
                 Err(e) => {
-                    println!("Error creating file {}: {}", TEMP_FILENAME, e);
+                    println!("Error creating file {}: {}", TEMP_IMAGE_NAME, e);
                     return internal_server_error_result();
                 }
             };
-            match file.write_all(&buf) {
+            match image_file.write_all(&buf) {
                 Ok(_) => (),
                 Err(e) => {
                     println!("Error writing buffer to file: {}", e);
                     return internal_server_error_result();
                 }
             };
-            let mut context = Context::new();
-            context.insert("path_to_image", TEMP_FILENAME);
-            let output = match tera.render("classify.html", &context) {
-                Ok(output) => output,
-                Err(e) => {
-                    println!("Error rendering classify.html: {}", e);
-                    return internal_server_error_result();
-                }
-            };
-            Ok(Response::new(Body::from(output)))
-        }
 
-        (&Method::POST, "/upload") => {
-            let buf = hyper::body::to_bytes(req.into_body()).await?;
-            let (parts, body) = req.into_parts();
-            let form_data = match formdata::read_formdata(&mut buf.reader(), parts.headers) {
-                Ok(data) => data,
-                Err(e) => {
-                    println!("Error reading form data: {}", e);
-                    return internal_server_error_result();
-                }
-            };
-            for (name, value) in form_data.fields {
-                println!("Posted field name={} value={}", name, value);
-            }
-            for (name, file) in form_data.files {
-                println!("Posted file name={} value={}", name, file.path);
-            }
-            // TODO(font): use unique file ID and to somehow link it to the client requesting this.
-            let mut file = match File::create(TEMP_FILENAME) {
-                Ok(file) => file,
-                Err(e) => {
-                    println!("Error creating file {}: {}", TEMP_FILENAME, e);
-                    return internal_server_error_result();
-                }
-            };
-            match file.write_all(&buf) {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("Error writing buffer to file: {}", e);
-                    return internal_server_error_result();
-                }
-            };
+            let results = crate::inference::infer_image(TEMP_IMAGE_NAME);
             let mut context = Context::new();
-            context.insert("path_to_image", TEMP_FILENAME);
+            context.insert("path_to_image", TEMP_IMAGE_NAME);
+            context.insert("inference_result", &results);
             let output = match tera.render("classify.html", &context) {
                 Ok(output) => output,
                 Err(e) => {
@@ -108,20 +67,13 @@ pub async fn http_handler(req: Request<Body>) -> Result<Response<Body>, hyper::E
         }
 
         _ if IMAGES_PATH.is_match(req.uri().path()) => {
-            let image_buf = match fs::read(TEMP_FILENAME) {
+            let image_buf = match fs::read(TEMP_IMAGE_NAME) {
                 Ok(buf) => buf,
                 Err(e) => {
-                    println!("Error reading {}: {}", TEMP_FILENAME, e);
+                    println!("Error reading {}: {}", TEMP_IMAGE_NAME, e);
                     return internal_server_error_result();
                 }
             };
-            //let content_type = match HeaderValue::from_static("image/jpg") {
-            //    Ok(ct) => ct,
-            //    Err(e) => {
-            //        println!("Error creating HeaderValue from str \"image/jpg\": {}", e);
-            //        return internal_server_error_result();
-            //    }
-            //};
             let mut response = Response::new(Body::from(image_buf));
             match response
                 .headers_mut()
@@ -130,18 +82,6 @@ pub async fn http_handler(req: Request<Body>) -> Result<Response<Body>, hyper::E
                 _ => (),
             };
             Ok(response)
-            //let response = match Response::builder()
-            //    .status(StatusCode::OK)
-            //    .header(header::CONTENT_TYPE, "image/jpg")
-            //    .body(image_buf)
-            //{
-            //    Ok(r) => r,
-            //    Err(e) => {
-            //        println!("Error creating response: {}", e);
-            //        return internal_server_error_result();
-            //    }
-            //};
-            //Ok(Response::new(response))
         }
         // Return the 404 Not Found for other routes.
         _ => {
@@ -158,7 +98,7 @@ fn internal_server_error_result() -> Result<Response<Body>, hyper::Error> {
     Ok(server_error)
 }
 
-const TEMP_FILENAME: &str = "temp.jpg";
+const TEMP_IMAGE_NAME: &str = "temp.jpg";
 
 lazy_static! {
     static ref IMAGES_PATH: Regex = Regex::new("^/.*\\.jpg$").unwrap();
@@ -209,5 +149,7 @@ const CLASSIFY_HTML_TEMPLATE: &'static str = r#"
     </form>
     <h1>Image to Infer:</h1>
     <img src="{{ path_to_image }}" alt="Inferencing image">
+    <h2>Result:</h2>
+    <p>{{ inference_result }}</p>
 {% endblock body %}
 "#;

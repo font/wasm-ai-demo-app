@@ -5,6 +5,7 @@ use hyper::service::service_fn;
 use tokio::net::TcpListener;
 
 mod http;
+mod inference;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
