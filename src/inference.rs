@@ -1,13 +1,20 @@
 use image;
 use std::convert::TryInto;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Read;
 use wasi_nn;
 
 mod imagenet_classes;
 
 pub fn infer_image(image_name: &str) -> String {
-    let model_data: &[u8] = include_bytes!("models/mobilenet.pt");
+    let model_data = include_bytes!("models/mobilenet.pt");
+    // FIXME: Comment out next line to see error.
+    let _model_bin_name: &str = "models/mobilenet.pt";
+
+    println!(
+        "Using torchscript binaries, size in bytes: {}",
+        model_data.len(),
+    );
 
     let graph = unsafe {
         wasi_nn::load(
@@ -22,7 +29,7 @@ pub fn infer_image(image_name: &str) -> String {
     let context = unsafe { wasi_nn::init_execution_context(graph).unwrap() };
     println!("Created wasi-nn execution context with ID: {}", context);
 
-    // Load a tensor that precisely matches the graph input tensor (see
+    // Load a tensor that precisely matches the graph input tensor
     let tensor_data = image_to_tensor(image_name.to_string(), 224, 224);
     println!("Read input tensor, size in bytes: {}", tensor_data.len());
     let tensor = wasi_nn::Tensor {
@@ -30,9 +37,11 @@ pub fn infer_image(image_name: &str) -> String {
         type_: wasi_nn::TENSOR_TYPE_F32,
         data: &tensor_data,
     };
+    println!("Before set_input");
     unsafe {
         wasi_nn::set_input(context, 0, tensor).unwrap();
     }
+    println!("Before compute");
     // Execute the inference.
     unsafe {
         wasi_nn::compute(context).unwrap();
