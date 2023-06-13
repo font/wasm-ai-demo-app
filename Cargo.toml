@@ -10,7 +10,7 @@ hyper_wasi = { version = "0.15", features = ["full"]}
 tokio_wasi = { version = "1", features = ["rt", "macros", "net", "time", "io-util"]}
 image = { version = "0.23.14", default-features = false, features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "hdr", "dxt", "dds", "farbfeld"]  }
 tera = { version = "1", default-features = false }
-wasi-nn = { version = "0.2.1" }
+wasi-nn = { version = "0.3.0" }
 wasmedge_wasi_socket = "0.4.3"
 lazy_static = "1.4.0"
 regex = "1.7.3"

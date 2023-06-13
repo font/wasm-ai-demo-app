@@ -1366,9 +1366,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasi-nn"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80715609d32850b55b000f7061a0b796d374bd37aa261db94eae0a6c2b35ccf8"
+checksum = "1820aa9f0aa2f1e240d52f65179f9ab2fc7afdbec2ee58ed6fe3c3dbf074fdfd"
 
 [[package]]
 name = "wasm-ai-demo-app"
