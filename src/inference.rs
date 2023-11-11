@@ -1,6 +1,5 @@
 use image;
-use std::convert::TryInto;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::Read;
 use wasi_nn;
 
@@ -8,56 +7,37 @@ mod imagenet_classes;
 
 pub fn infer_image(image_name: &str) -> String {
     let model_data = include_bytes!("models/mobilenet.pt");
-    // FIXME: Comment out next line to see error.
-    let _model_bin_name: &str = "models/mobilenet.pt";
 
     println!(
         "Using torchscript binaries, size in bytes: {}",
         model_data.len(),
     );
 
-    let graph = unsafe {
-        wasi_nn::load(
-            &[model_data],
-            wasi_nn::GRAPH_ENCODING_PYTORCH,
-            wasi_nn::EXECUTION_TARGET_CPU,
-        )
-        .unwrap()
-    };
-    println!("Loaded graph into wasi-nn with ID: {}", graph);
+    let graph = wasi_nn::GraphBuilder::new(
+        wasi_nn::GraphEncoding::Pytorch,
+        wasi_nn::ExecutionTarget::CPU,
+    )
+    .build_from_bytes([model_data])
+    .unwrap();
+    println!("Loaded graph into wasi-nn with ID: {:?}", graph);
 
-    let context = unsafe { wasi_nn::init_execution_context(graph).unwrap() };
-    println!("Created wasi-nn execution context with ID: {}", context);
+    let mut context = graph.init_execution_context().unwrap();
+    println!("Created wasi-nn execution context with ID: {:?}", context);
 
     // Load a tensor that precisely matches the graph input tensor
     let tensor_data = image_to_tensor(image_name.to_string(), 224, 224);
     println!("Read input tensor, size in bytes: {}", tensor_data.len());
-    let tensor = wasi_nn::Tensor {
-        dimensions: &[1, 3, 224, 224],
-        type_: wasi_nn::TENSOR_TYPE_F32,
-        data: &tensor_data,
-    };
-    println!("Before set_input");
-    unsafe {
-        wasi_nn::set_input(context, 0, tensor).unwrap();
-    }
-    println!("Before compute");
+    context
+        .set_input(0, wasi_nn::TensorType::F32, &[1, 3, 224, 224], &tensor_data)
+        .unwrap();
+
     // Execute the inference.
-    unsafe {
-        wasi_nn::compute(context).unwrap();
-    }
+    context.compute().unwrap();
     println!("Executed graph inference");
+
     // Retrieve the output.
     let mut output_buffer = vec![0f32; 1000];
-    unsafe {
-        wasi_nn::get_output(
-            context,
-            0,
-            &mut output_buffer[..] as *mut [f32] as *mut u8,
-            (output_buffer.len() * 4).try_into().unwrap(),
-        )
-        .unwrap();
-    }
+    context.get_output(0, &mut output_buffer).unwrap();
 
     const RESULT_COUNT: usize = 5;
     let results = sort_results(&output_buffer);
