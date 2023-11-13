@@ -1,28 +1,18 @@
 use std::net::SocketAddr;
-
-use hyper::server::conn::Http;
-use hyper::service::service_fn;
-use tokio::net::TcpListener;
-
-mod http;
-mod inference;
+use warp::Filter;
+mod routes;
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
 
-    let listener = TcpListener::bind(addr).await?;
-    println!("Listening on http://{}", addr);
-    loop {
-        let (stream, _) = listener.accept().await?;
+    // Combine the routes from the routes module
+    let routes = routes::root()
+        .or(routes::inference())
+        .or(routes::not_found());
 
-        tokio::task::spawn(async move {
-            if let Err(err) = Http::new()
-                .serve_connection(stream, service_fn(http::http_handler))
-                .await
-            {
-                println!("Error serving connection: {:?}", err);
-            }
-        });
-    }
+    println!("Listening on http://{}/", addr);
+
+    // Start the warp server
+    warp::serve(routes).run(addr).await;
 }

@@ -1,0 +1,14 @@
+{# Description: This is the page that shows the result of the inferencing. #}
+{% extends "base.html" %}
+
+{% block title %}Inference Result{% endblock title %}
+
+{% block body %}
+    <form action="/" method="get">
+        <input type="button" value="back" onclick="history.back()">
+    </form>
+    <h1>Image to Infer:</h1>
+    <img src="{{ path_to_image }}" alt="Inferencing image">
+    <h2>Result:</h2>
+    <p>{{ inference_result }}</p>
+{% endblock body %}

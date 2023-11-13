@@ -1,0 +1,19 @@
+{# Purpose: This is the main page of the web app. It contains a form to upload an image and a link to the API endpoint. #}
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock title %}
+
+{% block body %}
+    <h1>To infer an image try one of the options below:</h1>
+    <ol>
+        <li><p>POST data to /inference such as: `curl http://localhost:8080/inference -X POST --data-binary '@image.jpg'`</p></li>
+        <li><p>Use the below form to upload an image:</p></li>
+
+        <p>Click on the "Choose File" button to select a file and then click "Upload Image":</p>
+
+        <form action="upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="uploadedFile" accept=".jpg">
+            <input type="submit" value="Upload Image">
+        </form>
+    </ol>
+{% endblock body %}
