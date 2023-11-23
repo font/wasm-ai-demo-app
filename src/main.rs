@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use warp::Filter;
+mod inference;
 mod routes;
 
 #[tokio::main(flavor = "current_thread")]
