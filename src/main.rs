@@ -10,6 +10,7 @@ async fn main() {
     // Combine the routes from the routes module
     let routes = routes::root()
         .or(routes::inference())
+        .or(routes::upload())
         .or(routes::not_found());
 
     println!("Listening on http://{}/", addr);
