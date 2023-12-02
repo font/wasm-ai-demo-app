@@ -128,36 +128,39 @@ pub fn upload() -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + 
                         // Check if the file is a JPEG image
                         if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
                             // Process the raw image data here
-                            let bytes = match field.data().await {
-                                Some(Ok(buf)) => Some(Ok(warp::hyper::body::Bytes::from(
-                                    buf.copy_to_bytes(buf.remaining()).to_vec(),
-                                ))),
-                                Some(Err(err)) => {
-                                    // Return an error if the field data could not be read
-                                    Some(Err(warp::reject::custom(UploadError::ReadError(
-                                        err.to_string(),
-                                    ))))
-                                }
-                            };
-                            match process_image(bytes) {
-                                Ok(results) => {
-                                    let mut context = Context::new();
-                                    context.insert("path_to_image", UPLOADED_IMAGE_NAME);
-                                    context.insert("inference_result", &results);
+                            match field.data().await {
+                                Some(Ok(buf)) => {
+                                    match process_image(buf.copy_to_bytes(buf.remaining())) {
+                                        Ok(results) => {
+                                            let mut context = Context::new();
+                                            context.insert("path_to_image", UPLOADED_IMAGE_NAME);
+                                            context.insert("inference_result", &results);
 
-                                    match render_template_context("inference.html", &context) {
-                                        Ok(inference_template) => {
-                                            // Return an HTML response with the rendered template
-                                            Ok(warp::reply::with_status(
-                                                warp::reply::html(inference_template),
-                                                warp::http::StatusCode::OK,
-                                            ))
+                                            match render_template_context("inference.html", &context) {
+                                                Ok(inference_template) => {
+                                                    // Return an HTML response with the rendered template
+                                                    Ok(warp::reply::with_status(
+                                                        warp::reply::html(inference_template),
+                                                        warp::http::StatusCode::OK,
+                                                    ))
+                                                }
+                                                Err(err) => {
+                                                    // Return an error HTML response with the template rendering error
+                                                    Ok(warp::reply::with_status(
+                                                        warp::reply::html(format!(
+                                                            "<h1>Error rendering inference template: {}</h1>",
+                                                            err
+                                                        )),
+                                                        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                                    ))
+                                                }
+                                            }
                                         }
                                         Err(err) => {
-                                            // Return an error HTML response with the template rendering error
+                                            // Return an error HTML response with the inference error
                                             Ok(warp::reply::with_status(
                                                 warp::reply::html(format!(
-                                                    "<h1>Error rendering inference template: {}</h1>",
+                                                    "<h1>Error processing image: {}</h1>",
                                                     err
                                                 )),
                                                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -165,25 +168,45 @@ pub fn upload() -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + 
                                         }
                                     }
                                 }
-                                Err(err) => {
-                                    // Return an error HTML response with the inference error
+                                Some(Err(err)) => {
+                                    // Return an error if the field data could not be read
                                     Ok(warp::reply::with_status(
                                         warp::reply::html(format!(
-                                            "<h1>Error processing image: {}</h1>",
+                                            "<h1>Error reading field data: {}</h1>",
                                             err
                                         )),
                                         warp::http::StatusCode::INTERNAL_SERVER_ERROR,
                                     ))
+                                    //return Err(warp::reject::custom(UploadError::ReadError(
+                                    //    err.to_string(),
+                                    //)));
                                 }
+                                //Some(Ok(buf)) => Some(Ok(warp::hyper::body::Bytes::from(
+                                //    buf.copy_to_bytes(buf.remaining()).to_vec(),
+                                //))),
+                                //Some(Err(err)) => {
+                                //    // Return an error if the field data could not be read
+                                //    Some(Err(warp::reject::custom(UploadError::ReadError(
+                                //        err.to_string(),
+                                //    ))))
+                                //}
                             }
                             // Return the field if it is a JPEG image
                         } else {
                             // Return an error if the file is not a JPEG image
-                            return Err(warp::reject::custom(UploadError::NotAJpegImage));
+                            Ok(warp::reply::with_status(
+                                warp::reply::html(format!("<h1>Not a JPEG image</h1>")),
+                                warp::http::StatusCode::BAD_REQUEST,
+                            ))
+                            //return Err(warp::reject::custom(UploadError::NotAJpegImage));
                         }
                     } else {
                         // Return an error if the field is not a file
-                        return Err(warp::reject::custom(UploadError::NotAFile));
+                        Ok(warp::reply::with_status(
+                            warp::reply::html(format!("<h1>Not a file</h1>")),
+                            warp::http::StatusCode::BAD_REQUEST,
+                        ))
+                        //return Err(warp::reject::custom(UploadError::NotAFile));
                     }
                 })
                 .try_collect();
