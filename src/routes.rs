@@ -1,7 +1,8 @@
+use futures_util::TryStreamExt;
 use lazy_static::lazy_static;
 use std::fs;
 use tera::{Context, Tera};
-use warp::{Filter, Reply};
+use warp::{Buf, Filter, Reply};
 
 // Define static variables for HTML templates
 static BASE_TEMPLATE: &str = include_str!("templates/base.html");
@@ -127,7 +128,18 @@ pub fn upload() -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + 
                         // Check if the file is a JPEG image
                         if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
                             // Process the raw image data here
-                            match process_image(field.into_inner()) {
+                            let bytes = match field.data().await {
+                                Some(Ok(buf)) => Some(Ok(warp::hyper::body::Bytes::from(
+                                    buf.copy_to_bytes(buf.remaining()).to_vec(),
+                                ))),
+                                Some(Err(err)) => {
+                                    // Return an error if the field data could not be read
+                                    Some(Err(warp::reject::custom(UploadError::ReadError(
+                                        err.to_string(),
+                                    ))))
+                                }
+                            };
+                            match process_image(bytes) {
                                 Ok(results) => {
                                     let mut context = Context::new();
                                     context.insert("path_to_image", UPLOADED_IMAGE_NAME);
