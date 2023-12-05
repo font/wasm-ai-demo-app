@@ -120,102 +120,132 @@ pub fn upload() -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + 
         .and(warp::post())
         .and(warp::multipart::form().max_length(5 * 1024 * 1024)) // Set a 5MB limit on the multipart form data
         .and_then(|form: warp::multipart::FormData| {
-            // Iterate over the form fields
-            let result: Result<Vec<_>, _> = form
-                .and_then(|field| async move {
-                    // Check if the field is a file
-                    if let Some(filename) = field.filename() {
-                        // Check if the file is a JPEG image
-                        if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
-                            // Process the raw image data here
-                            match field.data().await {
-                                Some(Ok(buf)) => {
-                                    match process_image(buf.copy_to_bytes(buf.remaining())) {
-                                        Ok(results) => {
-                                            let mut context = Context::new();
-                                            context.insert("path_to_image", UPLOADED_IMAGE_NAME);
-                                            context.insert("inference_result", &results);
+            async {
+                // Iterate over the form fields
+                let result: Result<Vec<_>, _> = form
+                    .and_then(|part| async {
+                        // Check if the field is a file
+                        if let Some(filename) = part.filename() {
+                            // Check if the file is a JPEG image
+                            //if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+                            //    // Process the raw image data here
+                            //    match field.data().await {
+                            //        Some(Ok(buf)) => {
+                            //            match process_image(buf.copy_to_bytes(buf.remaining())) {
+                            //                Ok(results) => {
+                            //                    let mut context = Context::new();
+                            //                    context.insert("path_to_image", UPLOADED_IMAGE_NAME);
+                            //                    context.insert("inference_result", &results);
 
-                                            match render_template_context("inference.html", &context) {
-                                                Ok(inference_template) => {
-                                                    // Return an HTML response with the rendered template
-                                                    Ok(warp::reply::with_status(
-                                                        warp::reply::html(inference_template),
-                                                        warp::http::StatusCode::OK,
-                                                    ))
-                                                }
-                                                Err(err) => {
-                                                    // Return an error HTML response with the template rendering error
-                                                    Ok(warp::reply::with_status(
-                                                        warp::reply::html(format!(
-                                                            "<h1>Error rendering inference template: {}</h1>",
-                                                            err
-                                                        )),
-                                                        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-                                                    ))
-                                                }
-                                            }
-                                        }
-                                        Err(err) => {
-                                            // Return an error HTML response with the inference error
-                                            Ok(warp::reply::with_status(
-                                                warp::reply::html(format!(
-                                                    "<h1>Error processing image: {}</h1>",
-                                                    err
-                                                )),
-                                                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-                                            ))
-                                        }
-                                    }
-                                }
-                                Some(Err(err)) => {
-                                    // Return an error if the field data could not be read
-                                    Ok(warp::reply::with_status(
-                                        warp::reply::html(format!(
-                                            "<h1>Error reading field data: {}</h1>",
-                                            err
-                                        )),
-                                        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-                                    ))
-                                    //return Err(warp::reject::custom(UploadError::ReadError(
-                                    //    err.to_string(),
-                                    //)));
-                                }
-                                //Some(Ok(buf)) => Some(Ok(warp::hyper::body::Bytes::from(
-                                //    buf.copy_to_bytes(buf.remaining()).to_vec(),
-                                //))),
-                                //Some(Err(err)) => {
-                                //    // Return an error if the field data could not be read
-                                //    Some(Err(warp::reject::custom(UploadError::ReadError(
-                                //        err.to_string(),
-                                //    ))))
-                                //}
-                            }
-                            // Return the field if it is a JPEG image
-                        } else {
-                            // Return an error if the file is not a JPEG image
+                            //                    match render_template_context("inference.html", &context) {
+                            //                        Ok(inference_template) => {
+                            //                            // Return an HTML response with the rendered template
+                            //                            Ok(warp::reply::with_status(
+                            //                                warp::reply::html(inference_template),
+                            //                                warp::http::StatusCode::OK,
+                            //                            ))
+                            //                        }
+                            //                        Err(err) => {
+                            //                            // Return an error HTML response with the template rendering error
+                            //                            Ok(warp::reply::with_status(
+                            //                                warp::reply::html(format!(
+                            //                                    "<h1>Error rendering inference template: {}</h1>",
+                            //                                    err
+                            //                                )),
+                            //                                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            //                            ))
+                            //                        }
+                            //                    }
+                            //                }
+                            //                Err(err) => {
+                            //                    // Return an error HTML response with the inference error
+                            //                    Ok(warp::reply::with_status(
+                            //                        warp::reply::html(format!(
+                            //                            "<h1>Error processing image: {}</h1>",
+                            //                            err
+                            //                        )),
+                            //                        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            //                    ))
+                            //                }
+                            //            }
+                            //        }
+                            //        Some(Err(err)) => {
+                            //            // Return an error if the field data could not be read
+                            //            Ok(warp::reply::with_status(
+                            //                warp::reply::html(format!(
+                            //                    "<h1>Error reading field data: {}</h1>",
+                            //                    err
+                            //                )),
+                            //                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            //            ))
+                            //            //return Err(warp::reject::custom(UploadError::ReadError(
+                            //            //    err.to_string(),
+                            //            //)));
+                            //        }
+                            //        //Some(Ok(buf)) => Some(Ok(warp::hyper::body::Bytes::from(
+                            //        //    buf.copy_to_bytes(buf.remaining()).to_vec(),
+                            //        //))),
+                            //        //Some(Err(err)) => {
+                            //        //    // Return an error if the field data could not be read
+                            //        //    Some(Err(warp::reject::custom(UploadError::ReadError(
+                            //        //        err.to_string(),
+                            //        //    ))))
+                            //        //}
+                            //    }
+                            //    // Return the field if it is a JPEG image
+                            //} else {
+                            //    // Return an error if the file is not a JPEG image
+                            //    Ok(warp::reply::with_status(
+                            //        warp::reply::html(format!("<h1>Not a JPEG image</h1>")),
+                            //        warp::http::StatusCode::BAD_REQUEST,
+                            //    ))
+                            //    //return Err(warp::reject::custom(UploadError::NotAJpegImage));
+                            //}
                             Ok(warp::reply::with_status(
-                                warp::reply::html(format!("<h1>Not a JPEG image</h1>")),
+                                warp::reply::html(format!("<h1>A file!</h1>")),
+                                warp::http::StatusCode::OK,
+                            ))
+                        } else {
+                            // Return an error if the field is not a file
+                            Ok(warp::reply::with_status(
+                                warp::reply::html(format!("<h1>Not a file</h1>")),
                                 warp::http::StatusCode::BAD_REQUEST,
                             ))
-                            //return Err(warp::reject::custom(UploadError::NotAJpegImage));
+                            //return Err(warp::reject::custom(UploadError::NotAFile));
                         }
-                    } else {
-                        // Return an error if the field is not a file
-                        Ok(warp::reply::with_status(
-                            warp::reply::html(format!("<h1>Not a file</h1>")),
-                            warp::http::StatusCode::BAD_REQUEST,
-                        ))
-                        //return Err(warp::reject::custom(UploadError::NotAFile));
-                    }
-                })
-                .try_collect();
-            // Return the HTML response
-            warp::reply::html(result.unwrap_or_else(|_| {
-                warp::reply::html("<h1>Error processing form data</h1>")
-            }))
+                    })
+                    .try_collect()
+                    .await
+                    .map_err(|e| {
+                        // Return an error HTML response with the form processing error
+                        warp::reply::with_status(
+                            warp::reply::html(format!(
+                                "<h1>Error processing form data: {}</h1>",
+                                e
+                            )),
+                            warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        )
+                    });
+                // Return the HTML response
+                //warp::reply::with_status(result.unwrap_or_else(|e| {
+                //    // Return an error HTML response with the form processing error
+                //    warp::reply::with_status(
+                //        warp::reply::html(format!("<h1>Error processing form data</h1>")),
+                //        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                //    )
+                //}))
+                //result.unwrap_or_else(|e| {
+                //    // Return an error HTML response with the form processing error
+                //    let mut v = Vec::new();
+                //    v.push(warp::reply::with_status(
+                //        warp::reply::html(format!("<h1>Error processing form data</h1>")),
+                //        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                //    ));
+                //    v
+                //})
+                result
+            }
         })
-        .boxed()
 }
 
 pub fn not_found() -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + Clone {
